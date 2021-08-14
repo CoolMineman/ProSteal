@@ -1,0 +1,10 @@
+{
+    "schemaVersion": 1,
+    "id": "prosteal",
+    "version": "hood_classic",
+    "entrypoints": {
+        "preLaunch": [
+            "io.github.coolmineman.prosteal.ProSteal"
+        ]
+    }
+}
