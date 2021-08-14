@@ -1,14 +1,30 @@
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import io.github.coolcrabs.brachyura.compiler.java.JavaCompilationUnitBuilder;
 import io.github.coolcrabs.brachyura.dependency.JavaJarDependency;
 import io.github.coolcrabs.brachyura.fabric.FabricLoader;
 import io.github.coolcrabs.brachyura.fabric.FabricMaven;
 import io.github.coolcrabs.brachyura.fabric.FabricProject;
 import io.github.coolcrabs.brachyura.fabric.Yarn;
+import io.github.coolcrabs.brachyura.mappings.Namespaces;
+import io.github.coolcrabs.brachyura.mappings.tinyremapper.MappingTreeMappingProvider;
+import io.github.coolcrabs.brachyura.mappings.tinyremapper.PathFileConsumer;
+import io.github.coolcrabs.brachyura.mappings.tinyremapper.TinyRemapperHelper;
+import io.github.coolcrabs.brachyura.mappings.tinyremapper.TinyRemapperHelper.JarType;
 import io.github.coolcrabs.brachyura.project.Task;
+import io.github.coolcrabs.brachyura.util.ArrayUtil;
+import io.github.coolcrabs.brachyura.util.AtomicFile;
+import io.github.coolcrabs.brachyura.util.FileSystemUtil;
+import io.github.coolcrabs.brachyura.util.JvmUtil;
+import io.github.coolcrabs.brachyura.util.Util;
+import io.github.coolcrabs.javacompilelib.JavaCompilationUnit;
 import net.fabricmc.mappingio.tree.MappingTree;
+import net.fabricmc.tinyremapper.TinyRemapper;
 
 public class Buildscript extends FabricProject {
     @Override
@@ -50,12 +66,56 @@ public class Buildscript extends FabricProject {
 
     @Override
     public String getVersion() {
-        return "0.0.0";
+        return "0.0.2";
     }
 
     @Override
     public List<JavaJarDependency> createModDependencies() {
         return Collections.emptyList();
+    }
+
+    @Override
+    public boolean build() {
+        String[] compileArgs = ArrayUtil.join(String.class, 
+            JvmUtil.compileArgs(JvmUtil.CURRENT_JAVA_VERSION, 8),
+            "-AinMapFileNamedIntermediary=" + writeMappings4FabricStuff().toAbsolutePath().toString(),
+            // "-AoutMapFileNamedIntermediary=" + getLocalBrachyuraPath() + "wat.tiny",
+            "-AoutRefMapFile=" + getBuildResourcesDir().resolve(getModId() + "-refmap.json").toAbsolutePath().toString(),
+            "-AdefaultObfuscationEnv=named:intermediary"
+        );
+        JavaCompilationUnit javaCompilationUnit = new JavaCompilationUnitBuilder()
+                .sourceDir(getSrcDir())
+                .outputDir(getBuildClassesDir())
+                .classpath(getCompileDependencies())
+                .options(compileArgs)
+                .build();
+        if (!compile(javaCompilationUnit)) return false;
+        try {
+            Path target = getBuildJarPath();
+            Files.deleteIfExists(target);
+            try (AtomicFile atomicFile = new AtomicFile(target)) {
+                Files.deleteIfExists(atomicFile.tempPath);
+                TinyRemapper remapper = TinyRemapper.newRemapper().withMappings(new MappingTreeMappingProvider(getMappings(), Namespaces.NAMED, Namespaces.INTERMEDIARY)).withMappings(o -> {
+                    o.acceptClass("io/github/coolmineman/prosteal/ProSteal", "io/github/coolmineman/prosteal/True true null gamer");
+                }).build();
+                try {
+                    for (Path path : getCompileDependencies()) {
+                        TinyRemapperHelper.readJar(remapper, path, JarType.CLASSPATH);
+                    }
+                    TinyRemapperHelper.readDir(remapper, getBuildClassesDir(), JarType.INPUT);
+                    try (FileSystem outputFileSystem = FileSystemUtil.newJarFileSystem(atomicFile.tempPath)) {
+                        remapper.apply(new PathFileConsumer(outputFileSystem.getPath("/")));
+                        TinyRemapperHelper.copyNonClassfilesFromDir(getBuildResourcesDir(), outputFileSystem);
+                    }
+                } finally {
+                    remapper.finish();
+                }
+                atomicFile.commit();
+            }
+            return true;
+        } catch (Exception e) {
+            throw Util.sneak(e);
+        }
     }
 
 }

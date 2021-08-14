@@ -4,7 +4,7 @@
     "version": "hood_classic",
     "entrypoints": {
         "preLaunch": [
-            "io.github.coolmineman.prosteal.ProSteal"
+            "io.github.coolmineman.prosteal.True true null gamer"
         ]
     }
 }
