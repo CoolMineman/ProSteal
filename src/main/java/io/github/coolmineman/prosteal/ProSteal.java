@@ -1,45 +1,64 @@
 package io.github.coolmineman.prosteal;
 
-import java.net.JarURLConnection;
-import java.net.URI;
-import java.net.URL;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.Collections;
-import java.util.jar.JarFile;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
-import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.InsnNode;
+import org.spongepowered.asm.mixin.MixinEnvironment;
+import org.spongepowered.asm.mixin.transformer.ext.IExtension;
+import org.spongepowered.asm.mixin.transformer.ext.ITargetClassContext;
 
-public class ProSteal implements PreLaunchEntrypoint {
-    public static FileSystem getJarFileSystem(Path path) throws Exception {
-        return FileSystems.getFileSystem(new URI("jar:file", null, path.toUri().getPath(), ""));
-    }
+public enum ProSteal implements IExtension {
+    INSTANCE;
 
-    public static FileSystem createJarFileSystem(Path path) throws Exception {
-        return FileSystems.newFileSystem(new URI("jar:file", null, path.toUri().getPath(), ""), Collections.emptyMap());
+    Set<String> constTargets = new HashSet<>(Arrays.asList("https://api.stopmodreposts.org/sites.txt", "/stolen.html"));
+
+    @Override
+    public boolean checkActive(MixinEnvironment environment) {
+        return true;
     }
 
     @Override
-    public void onPreLaunch() {
-        try {
-            URL otherUrl = ((JarURLConnection)ProSteal.class.getClassLoader().getResource("i/am/cal/antisteal/Antisteal.class").openConnection()).getJarFileURL();
-            URL thisUrl = ((JarURLConnection)ProSteal.class.getClassLoader().getResource("io/github/coolmineman/prosteal/True true null gamer.class").openConnection()).getJarFileURL();
-            JarFile thisJar = ((JarURLConnection)ProSteal.class.getClassLoader().getResource("io/github/coolmineman/prosteal/True true null gamer.class").openConnection()).getJarFile();
-            System.out.println(thisUrl.toURI());
-            System.out.println(otherUrl.toURI());
-            if (!otherUrl.toURI().equals(thisUrl.toURI())) {
-                ((JarURLConnection)ProSteal.class.getClassLoader().getResource("i/am/cal/antisteal/Antisteal.class").openConnection()).getJarFile().close();
-                getJarFileSystem(Paths.get(otherUrl.toURI())).close();
-                try (FileSystem otherFs = createJarFileSystem(Paths.get(otherUrl.toURI()))) {
-                    Files.copy(thisJar.getInputStream(thisJar.getEntry("i/am/cal/antisteal/Antisteal.class")), otherFs.getPath("i/am/cal/antisteal/Antisteal.class"), StandardCopyOption.REPLACE_EXISTING);
+    public void preApply(ITargetClassContext context) {
+        //
+    }
+
+    @Override
+    public void postApply(ITargetClassContext context) {
+        MethodNode target = null;
+        for (MethodNode methodNode : context.getClassNode().methods) {
+            if (methodNode.parameters != null && methodNode.parameters.size() == 4) {
+                for (AbstractInsnNode ins : methodNode.instructions) {
+                    if (ins instanceof LdcInsnNode && constTargets.contains(((LdcInsnNode)ins).cst)) {
+                        target = methodNode;
+                    }
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
+        if (target != null) {
+            System.out.println("Prosteal: Patching " + context.getClassInfo().getClassName());
+            Iterator<AbstractInsnNode> iterator = target.instructions.iterator();
+            while (iterator.hasNext()) {
+                iterator.next();
+                iterator.remove();
+            }
+            target.instructions.insert(new InsnNode(Opcodes.RETURN));
+            target.tryCatchBlocks.clear();
+            target.localVariables.clear();
+        }
+    }
+
+    @Override
+    public void export(MixinEnvironment env, String name, boolean force, ClassNode classNode) {
+        //
     }
 }

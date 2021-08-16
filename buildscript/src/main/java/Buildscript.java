@@ -66,7 +66,7 @@ public class Buildscript extends FabricProject {
 
     @Override
     public String getVersion() {
-        return "0.0.2";
+        return "100.0.0";
     }
 
     @Override
@@ -97,6 +97,8 @@ public class Buildscript extends FabricProject {
                 Files.deleteIfExists(atomicFile.tempPath);
                 TinyRemapper remapper = TinyRemapper.newRemapper().withMappings(new MappingTreeMappingProvider(getMappings(), Namespaces.NAMED, Namespaces.INTERMEDIARY)).withMappings(o -> {
                     o.acceptClass("io/github/coolmineman/prosteal/ProSteal", "io/github/coolmineman/prosteal/True true null gamer");
+                    o.acceptClass("io/github/coolmineman/prosteal/mixin/ProStealPlugin", "io/github/coolmineman/prosteal/mixin/True false null gamer");
+                    o.acceptClass("io/github/coolmineman/prosteal/Garbage", "io/github/coolmineman/prosteal/Ra Ra Rasputin");
                 }).build();
                 try {
                     for (Path path : getCompileDependencies()) {
